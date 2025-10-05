@@ -98,6 +98,10 @@ int main(int argc, char *argv[]) {
             std::print("Checksum: {}\n", "CHECKSUM_NOT_IMPLEMENTED");
             break;
 
+        case COMMAND_TYPE::HELP:
+            std::cerr << options.GetDesc() << std::endl;
+            break;
+
         default:
             throw std::runtime_error{"Unsupported command"};
         }
