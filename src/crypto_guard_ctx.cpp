@@ -1,9 +1,12 @@
 #include "crypto_guard_ctx.h"
+#include "utility.hpp"
 #include <array>
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <openssl/err.h>
 #include <openssl/evp.h>
+#include <stdexcept>
 #include <vector>
 
 namespace CryptoGuard {
@@ -38,7 +41,7 @@ public:
     Impl() = default;
     ~Impl() = default;
     void EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password);
-    void DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {}
+    void DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password);
     std::string CalculateChecksum(std::istream &inStream) { return {}; }
 
 private:
@@ -53,33 +56,61 @@ void CryptoGuardCtx::EncryptFile(std::istream &inStream, std::ostream &outStream
     pImpl_->EncryptFile(inStream, outStream, password);
 }
 
-void CryptoGuardCtx::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {}
+void CryptoGuardCtx::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+    pImpl_->DecryptFile(inStream, outStream, password);
+}
 
 std::string CryptoGuardCtx::CalculateChecksum(std::istream &inStream) { return pImpl_->CalculateChecksum(inStream); }
 
 void CryptoGuardCtx::Impl::EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+    static const size_t kBlockSize = 16;
     auto params = CreateChiperParamsFromPassword(password);
     params.encrypt = 1;
     CipherPtr ctx(EVP_CIPHER_CTX_new());
     EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
 
-    std::vector<unsigned char> outBuf(16 + EVP_MAX_BLOCK_LENGTH);
-    std::vector<unsigned char> inBuf(16);
+    std::vector<unsigned char> outBuf(kBlockSize + EVP_MAX_BLOCK_LENGTH);
+    std::vector<unsigned char> inBuf(kBlockSize);
     int outLen;
 
-    // Обрабатываем первые N символов
     auto iter = std::istream_iterator<unsigned char>(inStream);
-    std::copy_n(iter, 16, inBuf.begin());
-    EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(16));
+    while (iter != std::istream_iterator<unsigned char>()) {
+        auto r = GryptoGuard::Utility::read_block(iter, inBuf, kBlockSize);
+        if (auto res = EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(r.second));
+            res != 1) {
+            unsigned long err_code = ERR_get_error();
+            throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
+        }
+        for (int i = 0; i < outLen; ++i) {
+            outStream << outBuf[i];
+        }
+        iter = r.first;
+    }
+    EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen);
     for (int i = 0; i < outLen; ++i) {
         outStream << outBuf[i];
     }
-    std::advance(iter, 16);
-    std::copy(iter, std::istream_iterator<unsigned char>(), inBuf.begin());
-    auto n = std::distance(iter, std::istream_iterator<unsigned char>());
-    EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(n));
-    for (int i = 0; i < outLen; ++i) {
-        outStream << outBuf[i];
+}
+
+void CryptoGuardCtx::Impl::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+    static const size_t kBlockSize = 16;
+    auto params = CreateChiperParamsFromPassword(password);
+    params.encrypt = 0;  // Set to 0 for decryption
+    CipherPtr ctx(EVP_CIPHER_CTX_new());
+    EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
+
+    std::vector<unsigned char> outBuf(kBlockSize + EVP_MAX_BLOCK_LENGTH);
+    std::vector<unsigned char> inBuf(kBlockSize);
+    int outLen;
+
+    auto iter = std::istream_iterator<unsigned char>(inStream);
+    while (iter != std::istream_iterator<unsigned char>()) {
+        auto r = GryptoGuard::Utility::read_block(iter, inBuf, kBlockSize);
+        EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(r.second));
+        for (int i = 0; i < outLen; ++i) {
+            outStream << outBuf[i];
+        }
+        iter = r.first;
     }
     EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen);
     for (int i = 0; i < outLen; ++i) {
