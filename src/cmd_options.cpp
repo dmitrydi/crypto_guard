@@ -18,9 +18,10 @@ ProgramOptions::ProgramOptions() : desc_("Allowed options") {
 
 ProgramOptions::~ProgramOptions() = default;
 
-void ProgramOptions::Parse(int argc, char *argv[]) {
+void ProgramOptions::Parse(int argc, const char *argv[]) {
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc_), vm);
+    po::notify(vm);
 
     if (vm.count("help")) {
         command_ = COMMAND_TYPE::HELP;
