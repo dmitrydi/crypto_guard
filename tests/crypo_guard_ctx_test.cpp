@@ -1,15 +1,19 @@
 #include "cmd_options.h"
+#include "crypto_guard_ctx.h"
+#include <boost/scope/defer.hpp>
 #include <gtest/gtest.h>
+#include <openssl/evp.h>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
 namespace {
-std::vector<const char *> prepare_cmd_input(const std::vector<std::string> &params) {
-    static const std::string main_name("name");
-    std::vector<const char *> res;
+std::vector<char *> prepare_cmd_input(std::vector<std::string> &params) {
+    static std::string main_name("name");
+    std::vector<char *> res;
     res.reserve(params.size() + 1);
     res.push_back(&main_name[0]);
-    for (const auto &s : params) {
+    for (auto &s : params) {
         res.push_back(&s[0]);
     }
     return res;
@@ -99,4 +103,15 @@ TEST(ProgramOptions, TestThrowOnParamsMissing) {
         ProgramOptions options;
         EXPECT_THROW(options.Parse(cmd.size(), cmd.data()), std::runtime_error);
     }
+}
+
+TEST(CryptoGuardCtx, TestEncryption) {
+    OpenSSL_add_all_algorithms();
+    boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
+    std::string password("password");
+    std::istringstream iss("01234567890123456789");
+    std::ostringstream oss;
+    CryptoGuardCtx ctx;
+    EXPECT_NO_THROW(ctx.EncryptFile(iss, oss, password));
+    std::cerr << "Encoded: " << oss.str() << std::endl;
 }

@@ -21,7 +21,7 @@ public:
         UNK,
     };
 
-    void Parse(int argc, const char *argv[]);
+    void Parse(int argc, char *argv[]);
 
     COMMAND_TYPE GetCommand() const { return command_; }
     std::string GetInputFile() const { return inputFile_; }

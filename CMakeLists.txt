@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.30)
 project(CryptoGuard VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -15,7 +15,7 @@ endif()
 
 # Ищем необходимые библиотеки
 find_package(OpenSSL REQUIRED)
-find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost 1.86.0 REQUIRED)
 find_package(GTest REQUIRED)
 
 # Рекурсивно ищем все используемые .cpp и .h файлы, кроме main.cpp
