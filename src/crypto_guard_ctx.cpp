@@ -1,10 +1,12 @@
 #include "crypto_guard_ctx.h"
 #include <array>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <memory>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -141,11 +143,11 @@ std::string CryptoGuardCtx::Impl::CalculateChecksum(std::istream &inStream) {
         unsigned long err_code = ERR_get_error();
         throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
     }
-    std::string result;
+    std::ostringstream oss;
     for (unsigned i = 0; i != md_len; ++i) {
-        result.push_back(md_value[i]);
+        oss << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(md_value[i]);
     }
-    return result;
+    return oss.str();
 }
 
 CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<CryptoGuardCtx::Impl>()) {}

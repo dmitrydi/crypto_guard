@@ -51,6 +51,9 @@ void ProgramOptions::Parse(int argc, char *argv[]) {
         throw std::runtime_error("output file not set\n");
     }
 
+    if (command_ == COMMAND_TYPE::CHECKSUM) {
+        return;
+    }
     if (auto it = vm.find("password"); it != vm.end()) {
         password_ = it->second.as<std::string>();
     } else {

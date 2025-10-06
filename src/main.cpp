@@ -4,6 +4,7 @@
 #include <array>
 #include <boost/scope/defer.hpp>
 #include <fstream>
+#include <ios>
 #include <iostream>
 #include <openssl/evp.h>
 #include <print>
@@ -47,11 +48,16 @@ int main(int argc, char *argv[]) {
 
         options.Parse(argc, argv);
 
-        std::ifstream ifs(options.GetInputFile());
+        if (options.GetCommand() == COMMAND_TYPE::HELP) {
+            std::cerr << options.GetDesc() << std::endl;
+            return 1;
+        }
+
+        std::ifstream ifs(options.GetInputFile(), std::ios_base::binary);
         if (!ifs.is_open()) {
             throw std::runtime_error(std::format("could not open file {}", options.GetInputFile()));
         }
-        std::ofstream ofs(options.GetOutputFile());
+        std::ofstream ofs(options.GetOutputFile(), std::ios_base::binary);
         if (!ofs.is_open()) {
             throw std::runtime_error(std::format("could not open file {}", options.GetOutputFile()));
         }
@@ -63,12 +69,15 @@ int main(int argc, char *argv[]) {
             break;
 
         case COMMAND_TYPE::DECRYPT:
+            cryptoCtx.DecryptFile(ifs, ofs, options.GetPassword());
             std::print("File decoded successfully\n");
             break;
 
-        case COMMAND_TYPE::CHECKSUM:
-            std::print("Checksum: {}\n", "CHECKSUM_NOT_IMPLEMENTED");
-            break;
+        case COMMAND_TYPE::CHECKSUM: {
+            auto checksum = cryptoCtx.CalculateChecksum(ifs);
+            ofs << checksum;
+            std::print("Checksum: {}\n", checksum);
+        } break;
 
         case COMMAND_TYPE::HELP:
             std::cerr << options.GetDesc() << std::endl;
@@ -77,7 +86,6 @@ int main(int argc, char *argv[]) {
         default:
             throw std::runtime_error{"Unsupported command"};
         }
-
     } catch (const std::exception &e) {
         std::print(std::cerr, "Error: {}\n", e.what());
         return 1;
