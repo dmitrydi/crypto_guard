@@ -37,29 +37,16 @@ inline AesCipherParams CreateChiperParamsFromPassword(std::string_view password)
 
 class CryptoGuardCtx::Impl {
 public:
-    Impl() = default;
-    ~Impl() = default;
+    Impl() { OpenSSL_add_all_algorithms(); }
+    ~Impl() { EVP_cleanup(); }
     void EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password);
     void DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password);
-    std::string CalculateChecksum(std::istream &inStream) { return {}; }
+    std::string CalculateChecksum(std::istream &inStream);
 
 private:
     using CipherPtr = std::unique_ptr<EVP_CIPHER_CTX, decltype([](EVP_CIPHER_CTX *ptr) { EVP_CIPHER_CTX_free(ptr); })>;
+    using MdPtr = std::unique_ptr<EVP_MD_CTX, decltype([](EVP_MD_CTX *ptr) { EVP_MD_CTX_free(ptr); })>;
 };
-
-CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<CryptoGuardCtx::Impl>()) {}
-
-CryptoGuardCtx::~CryptoGuardCtx() = default;
-
-void CryptoGuardCtx::EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
-    pImpl_->EncryptFile(inStream, outStream, password);
-}
-
-void CryptoGuardCtx::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
-    pImpl_->DecryptFile(inStream, outStream, password);
-}
-
-std::string CryptoGuardCtx::CalculateChecksum(std::istream &inStream) { return pImpl_->CalculateChecksum(inStream); }
 
 void CryptoGuardCtx::Impl::EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
     static const size_t kBlockSize = 16;
@@ -67,6 +54,9 @@ void CryptoGuardCtx::Impl::EncryptFile(std::istream &inStream, std::ostream &out
     params.encrypt = 1;
 
     CipherPtr ctx(EVP_CIPHER_CTX_new());
+    if (!ctx) {
+        throw std::runtime_error("Failed to create cipher context");
+    }
     EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
 
     std::vector<unsigned char> outBuf(kBlockSize + EVP_MAX_BLOCK_LENGTH);
@@ -96,6 +86,9 @@ void CryptoGuardCtx::Impl::DecryptFile(std::istream &inStream, std::ostream &out
     params.encrypt = 0;
 
     CipherPtr ctx(EVP_CIPHER_CTX_new());
+    if (!ctx) {
+        throw std::runtime_error("Failed to create cipher context");
+    }
     EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
 
     std::vector<unsigned char> outBuf(kBlockSize + EVP_MAX_BLOCK_LENGTH);
@@ -118,5 +111,55 @@ void CryptoGuardCtx::Impl::DecryptFile(std::istream &inStream, std::ostream &out
     }
     outStream.write(reinterpret_cast<const char *>(outBuf.data()), outLen);
 }
+
+std::string CryptoGuardCtx::Impl::CalculateChecksum(std::istream &inStream) {
+    auto md = EVP_get_digestbyname("sha256");
+    if (!md) {
+        throw std::runtime_error("EVP_get_digestbyname fail");
+    }
+    MdPtr ctx(EVP_MD_CTX_new());
+    if (!ctx) {
+        throw std::runtime_error("Failed to create md context");
+    }
+    if (!EVP_DigestInit_ex2(ctx.get(), md, nullptr)) {
+        unsigned long err_code = ERR_get_error();
+        throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
+    }
+
+    std::string input;
+
+    input.assign(std::istreambuf_iterator<char>(inStream), std::istreambuf_iterator<char>());
+
+    if (!EVP_DigestUpdate(ctx.get(), input.c_str(), input.size())) {
+        unsigned long err_code = ERR_get_error();
+        throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
+    }
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    unsigned int md_len;
+
+    if (!EVP_DigestFinal_ex(ctx.get(), md_value, &md_len)) {
+        unsigned long err_code = ERR_get_error();
+        throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
+    }
+    std::string result;
+    for (unsigned i = 0; i != md_len; ++i) {
+        result.push_back(md_value[i]);
+    }
+    return result;
+}
+
+CryptoGuardCtx::CryptoGuardCtx() : pImpl_(std::make_unique<CryptoGuardCtx::Impl>()) {}
+
+CryptoGuardCtx::~CryptoGuardCtx() = default;
+
+void CryptoGuardCtx::EncryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+    pImpl_->EncryptFile(inStream, outStream, password);
+}
+
+void CryptoGuardCtx::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
+    pImpl_->DecryptFile(inStream, outStream, password);
+}
+
+std::string CryptoGuardCtx::CalculateChecksum(std::istream &inStream) { return pImpl_->CalculateChecksum(inStream); }
 
 }  // namespace CryptoGuard

@@ -38,8 +38,6 @@ AesCipherParams CreateChiperParamsFromPassword(std::string_view password) {
 
 int main(int argc, char *argv[]) {
     try {
-        OpenSSL_add_all_algorithms();
-        boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
 
         CryptoGuard::ProgramOptions options;
 

@@ -111,8 +111,6 @@ TEST(ProgramOptions, TestThrowOnParamsMissing) {
 }
 
 TEST(CryptoGuardCtx, TestEncryption) {
-    OpenSSL_add_all_algorithms();
-    boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
     std::string password("password");
     std::istringstream iss("01234567890123456789");
     std::ostringstream oss;
@@ -121,8 +119,6 @@ TEST(CryptoGuardCtx, TestEncryption) {
 }
 
 TEST(CryptoGuardCtx, TestDecryption) {
-    OpenSSL_add_all_algorithms();
-    boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
     std::string password("password");
     std::string text = "01234567890123456789";
     std::istringstream iss(text);
@@ -134,4 +130,12 @@ TEST(CryptoGuardCtx, TestDecryption) {
     std::ostringstream decoded;
     EXPECT_NO_THROW(ctx.DecryptFile(encoded, decoded, password));
     EXPECT_EQ(decoded.str(), text);
+}
+
+TEST(CryptoGuardCtx, TestChecksum) {
+    std::string text = "hello world";
+    std::istringstream iss(text);
+    CryptoGuardCtx ctx;
+    auto res = ctx.CalculateChecksum(iss);
+    EXPECT_EQ(res.size(), 32);
 }
