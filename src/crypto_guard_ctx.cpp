@@ -1,5 +1,4 @@
 #include "crypto_guard_ctx.h"
-#include "utility.hpp"
 #include <array>
 #include <iostream>
 #include <iterator>

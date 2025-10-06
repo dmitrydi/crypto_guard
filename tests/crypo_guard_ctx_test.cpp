@@ -1,6 +1,5 @@
 #include "cmd_options.h"
 #include "crypto_guard_ctx.h"
-#include "utility.hpp"
 #include <algorithm>
 #include <boost/scope/defer.hpp>
 #include <cstddef>
@@ -111,16 +110,15 @@ TEST(ProgramOptions, TestThrowOnParamsMissing) {
     }
 }
 
-// TEST(CryptoGuardCtx, TestEncryption) {
-//     OpenSSL_add_all_algorithms();
-//     boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
-//     std::string password("password");
-//     std::istringstream iss("01234567890123456789");
-//     std::ostringstream oss;
-//     CryptoGuardCtx ctx;
-//     EXPECT_NO_THROW(ctx.EncryptFile(iss, oss, password));
-//     std::cerr << "Encoded: " << oss.str() << std::endl;
-// }
+TEST(CryptoGuardCtx, TestEncryption) {
+    OpenSSL_add_all_algorithms();
+    boost::scope::defer_guard on_exit([] { EVP_cleanup(); });
+    std::string password("password");
+    std::istringstream iss("01234567890123456789");
+    std::ostringstream oss;
+    CryptoGuardCtx ctx;
+    EXPECT_NO_THROW(ctx.EncryptFile(iss, oss, password));
+}
 
 TEST(CryptoGuardCtx, TestDecryption) {
     OpenSSL_add_all_algorithms();
@@ -137,21 +135,3 @@ TEST(CryptoGuardCtx, TestDecryption) {
     EXPECT_NO_THROW(ctx.DecryptFile(encoded, decoded, password));
     EXPECT_EQ(decoded.str(), text);
 }
-
-// TEST(Utility, TestBlockRead) {
-//     std::string s = "01234567890123456789";
-//     size_t block_size = 7;
-//     std::istringstream iss(s);
-//     std::vector<unsigned char> buff(block_size);
-//     auto it = std::istream_iterator<unsigned char>(iss);
-//     std::vector<std::string> chunks{"0123456", "7890123", "456789"};
-//     size_t cntr{};
-//     while (it != std::istream_iterator<unsigned char>()) {
-//         auto r = GryptoGuard::Utility::read_block(it, buff, block_size);
-//         it = r.first;
-//         std::string substr;
-//         std::transform(buff.begin(), buff.begin() + r.second, std::back_inserter(substr),
-//                        [](unsigned char c) { return static_cast<char>(c); });
-//         EXPECT_EQ(substr, chunks[cntr++]);
-//     }
-// }
