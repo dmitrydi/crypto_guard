@@ -66,6 +66,7 @@ void CryptoGuardCtx::Impl::EncryptFile(std::istream &inStream, std::ostream &out
     static const size_t kBlockSize = 16;
     auto params = CreateChiperParamsFromPassword(password);
     params.encrypt = 1;
+
     CipherPtr ctx(EVP_CIPHER_CTX_new());
     EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
 
@@ -73,29 +74,28 @@ void CryptoGuardCtx::Impl::EncryptFile(std::istream &inStream, std::ostream &out
     std::vector<unsigned char> inBuf(kBlockSize);
     int outLen;
 
-    auto iter = std::istream_iterator<unsigned char>(inStream);
-    while (iter != std::istream_iterator<unsigned char>()) {
-        auto r = GryptoGuard::Utility::read_block(iter, inBuf, kBlockSize);
-        if (auto res = EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(r.second));
-            res != 1) {
+    while (inStream.read(reinterpret_cast<char *>(inBuf.data()), kBlockSize) || inStream.gcount() > 0) {
+        size_t bytesRead = inStream.gcount();
+
+        if (!EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(bytesRead))) {
             unsigned long err_code = ERR_get_error();
             throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
         }
-        for (int i = 0; i < outLen; ++i) {
-            outStream << outBuf[i];
-        }
-        iter = r.first;
+        outStream.write(reinterpret_cast<const char *>(outBuf.data()), outLen);
     }
-    EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen);
-    for (int i = 0; i < outLen; ++i) {
-        outStream << outBuf[i];
+
+    if (!EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen)) {
+        unsigned long err_code = ERR_get_error();
+        throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
     }
+    outStream.write(reinterpret_cast<const char *>(outBuf.data()), outLen);
 }
 
 void CryptoGuardCtx::Impl::DecryptFile(std::istream &inStream, std::ostream &outStream, std::string_view password) {
     static const size_t kBlockSize = 16;
     auto params = CreateChiperParamsFromPassword(password);
-    params.encrypt = 0;  // Set to 0 for decryption
+    params.encrypt = 0;
+
     CipherPtr ctx(EVP_CIPHER_CTX_new());
     EVP_CipherInit_ex(ctx.get(), params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
 
@@ -103,66 +103,21 @@ void CryptoGuardCtx::Impl::DecryptFile(std::istream &inStream, std::ostream &out
     std::vector<unsigned char> inBuf(kBlockSize);
     int outLen;
 
-    auto iter = std::istream_iterator<unsigned char>(inStream);
-    while (iter != std::istream_iterator<unsigned char>()) {
-        auto r = GryptoGuard::Utility::read_block(iter, inBuf, kBlockSize);
-        EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(r.second));
-        for (int i = 0; i < outLen; ++i) {
-            outStream << outBuf[i];
+    while (inStream.read(reinterpret_cast<char *>(inBuf.data()), kBlockSize) || inStream.gcount() > 0) {
+        size_t bytesRead = inStream.gcount();
+
+        if (!EVP_CipherUpdate(ctx.get(), outBuf.data(), &outLen, inBuf.data(), static_cast<int>(bytesRead))) {
+            unsigned long err_code = ERR_get_error();
+            throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
         }
-        iter = r.first;
+        outStream.write(reinterpret_cast<const char *>(outBuf.data()), outLen);
     }
-    EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen);
-    for (int i = 0; i < outLen; ++i) {
-        outStream << outBuf[i];
+
+    if (!EVP_CipherFinal_ex(ctx.get(), outBuf.data(), &outLen)) {
+        unsigned long err_code = ERR_get_error();
+        throw std::runtime_error(std::format("{}", ERR_error_string(err_code, nullptr)));
     }
+    outStream.write(reinterpret_cast<const char *>(outBuf.data()), outLen);
 }
-
-/*
-        //
-        // OpenSSL пример использования:
-        //
-        std::string input = "01234567890123456789";
-        std::string output;
-
-        OpenSSL_add_all_algorithms();
-
-        auto params = CreateChiperParamsFromPassword("12341234");
-        params.encrypt = 1;
-        auto *ctx = EVP_CIPHER_CTX_new();
-
-        // Инициализируем cipher
-        EVP_CipherInit_ex(ctx, params.cipher, nullptr, params.key.data(), params.iv.data(), params.encrypt);
-
-        std::vector<unsigned char> outBuf(16 + EVP_MAX_BLOCK_LENGTH);
-        std::vector<unsigned char> inBuf(16);
-        int outLen;
-
-        // Обрабатываем первые N символов
-        std::copy(input.begin(), std::next(input.begin(), 16), inBuf.begin());
-        EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(16));
-        for (int i = 0; i < outLen; ++i) {
-            output.push_back(outBuf[i]);
-        }
-
-        // Обрабатываем оставшиеся символы
-        std::copy(std::next(input.begin(), 16), input.end(), inBuf.begin());
-        EVP_CipherUpdate(ctx, outBuf.data(), &outLen, inBuf.data(), static_cast<int>(input.size() - 16));
-        for (int i = 0; i < outLen; ++i) {
-            output.push_back(outBuf[i]);
-        }
-
-        // Заканчиваем работу с cipher
-        EVP_CipherFinal_ex(ctx, outBuf.data(), &outLen);
-        for (int i = 0; i < outLen; ++i) {
-            output.push_back(outBuf[i]);
-        }
-        EVP_CIPHER_CTX_free(ctx);
-        std::print("String encoded successfully. Result: '{}'\n\n", output);
-        EVP_cleanup();
-        //
-        // Конец примера
-        //
-*/
 
 }  // namespace CryptoGuard

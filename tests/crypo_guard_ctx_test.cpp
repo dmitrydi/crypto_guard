@@ -5,6 +5,7 @@
 #include <boost/scope/defer.hpp>
 #include <cstddef>
 #include <gtest/gtest.h>
+#include <ios>
 #include <iterator>
 #include <openssl/evp.h>
 #include <sstream>
@@ -127,10 +128,11 @@ TEST(CryptoGuardCtx, TestDecryption) {
     std::string password("password");
     std::string text = "01234567890123456789";
     std::istringstream iss(text);
-    std::ostringstream oss;
+    std::ostringstream oss(std::ios_base::binary);
     CryptoGuardCtx ctx;
     EXPECT_NO_THROW(ctx.EncryptFile(iss, oss, password));
-    std::istringstream encoded{oss.str()};
+    std::istringstream encoded(std::ios_base::binary);
+    encoded.str(oss.str());
     std::ostringstream decoded;
     EXPECT_NO_THROW(ctx.DecryptFile(encoded, decoded, password));
     EXPECT_EQ(decoded.str(), text);
