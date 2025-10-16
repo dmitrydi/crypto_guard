@@ -10,7 +10,7 @@ class CryptoGuardConan(ConanFile):
     
     def requirements(self):
         self.requires("openssl/3.1.1")
-        self.requires("boost/1.83.0")
+        self.requires("boost/1.86.0")
         self.requires("gtest/1.13.0")
         self.tool_requires("cmake/3.30.0")
     

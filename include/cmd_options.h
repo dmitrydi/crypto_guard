@@ -6,15 +6,19 @@
 
 namespace CryptoGuard {
 
+namespace po = boost::program_options;
+
 class ProgramOptions {
 public:
     ProgramOptions();
     ~ProgramOptions();
 
     enum class COMMAND_TYPE {
+        HELP,
         ENCRYPT,
         DECRYPT,
         CHECKSUM,
+        UNK,
     };
 
     void Parse(int argc, char *argv[]);
@@ -23,9 +27,10 @@ public:
     std::string GetInputFile() const { return inputFile_; }
     std::string GetOutputFile() const { return outputFile_; }
     std::string GetPassword() const { return password_; }
+    const auto &GetDesc() const { return desc_; }
 
 private:
-    COMMAND_TYPE command_;
+    COMMAND_TYPE command_{COMMAND_TYPE::UNK};
     const std::unordered_map<std::string_view, COMMAND_TYPE> commandMapping_ = {
         {"encrypt", ProgramOptions::COMMAND_TYPE::ENCRYPT},
         {"decrypt", ProgramOptions::COMMAND_TYPE::DECRYPT},
